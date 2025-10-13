@@ -14,7 +14,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         return $request->user();
     });
 
-    Route::apiResource('devices', DeviceController::class);
+    //Route::apiResource('devices', DeviceController::class);
     
     // Ruta para generar tokens de aprovisionamiento
     Route::post('provisioning-tokens', [ProvisioningTokenController::class, 'store'])->name('provisioning-tokens.store');

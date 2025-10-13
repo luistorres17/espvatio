@@ -9,9 +9,10 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Models\Device;
 use App\Models\Measurement;
-use App\Models\ProvisioningToken; // Importar el modelo del token
+use App\Models\ProvisioningToken;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use PhpMqtt\Client\MqttClient; // Para publicar la respuesta
 
 class ProcessMeasurementJob implements ShouldQueue
 {
@@ -28,55 +29,70 @@ class ProcessMeasurementJob implements ShouldQueue
 
     public function handle(): void
     {
-        // 1. Extraer el token/serial_number del topic
-        $serialNumber = Str::of($this->topic)->after('devices/')->before('/measurements')->toString();
-
-        if (empty($serialNumber)) {
-            Log::warning("No se pudo extraer el serial_number del topic: {$this->topic}");
-            return;
-        }
-
-        // 2. Buscar si el dispositivo ya existe en la base de datos
-        $device = Device::withoutGlobalScopes()->where('serial_number', $serialNumber)->first();
-
-        // 3. Si el dispositivo NO existe, intentar aprovisionarlo
-        if (!$device) {
-            Log::info("Dispositivo [{$serialNumber}] no encontrado. Intentando aprovisionamiento...");
-
-            // Buscar un token de aprovisionamiento válido
-            $provisioningToken = ProvisioningToken::withoutGlobalScopes()
-                ->where('token', $serialNumber)
-                ->whereNull('used_at')
-                ->where('expires_at', '>', now())
-                ->first();
-
-            // Si no se encuentra un token válido, se ignora el mensaje
-            if (!$provisioningToken) {
-                Log::warning("Token de aprovisionamiento inválido o expirado para: {$serialNumber}");
-                return;
-            }
-
-            // Si el token es válido, creamos el nuevo dispositivo
-            $device = Device::create([
-                'team_id' => $provisioningToken->team_id,
-                'name' => 'Device ' . Str::limit($serialNumber, 8), // Un nombre por defecto
-                'serial_number' => $serialNumber, // El token se convierte en el serial_number
-                'status' => 'active',
-            ]);
-
-            // Marcamos el token como usado para que no se pueda reutilizar
-            $provisioningToken->update(['used_at' => now()]);
-
-            Log::info("¡Aprovisionamiento exitoso! Nuevo dispositivo creado con ID: {$device->id} para el equipo: {$device->team_id}");
-        }
-
-        // 4. Decodificar y almacenar la medición (para dispositivos nuevos y existentes)
+        $identifier = Str::of($this->topic)->after('devices/')->before('/measurements')->toString();
         $data = json_decode($this->payload, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            Log::warning("Payload JSON inválido para el dispositivo {$device->id}: {$this->payload}");
+
+        // Intentamos encontrar un dispositivo existente por su serial_number (que es el ChipID)
+        $device = Device::withoutGlobalScopes()->where('serial_number', $identifier)->first();
+
+        // --- FLUJO DE APROVISIONAMIENTO (SI EL DISPOSITIVO NO EXISTE) ---
+        if (!$device) {
+            $this->provisionDevice($identifier, $data);
             return;
         }
 
+        // --- FLUJO DE TELEMETRÍA NORMAL (SI EL DISPOSITIVO YA EXISTE) ---
+        $this->recordMeasurement($device, $data);
+    }
+
+    /**
+     * Maneja el aprovisionamiento de un nuevo dispositivo.
+     */
+    protected function provisionDevice(string $tempToken, array $data): void
+    {
+        Log::info("Iniciando flujo de aprovisionamiento para el token temporal: {$tempToken}");
+
+        // 1. Validar que el payload contenga el chip_id
+        if (!isset($data['chip_id'])) {
+            Log::warning("Mensaje de aprovisionamiento para [{$tempToken}] no contiene 'chip_id'. Mensaje descartado.");
+            return;
+        }
+        $chipId = $data['chip_id'];
+
+        // 2. Validar el token de aprovisionamiento temporal
+        $provisioningToken = ProvisioningToken::withoutGlobalScopes()
+            ->where('token', $tempToken)
+            ->whereNull('used_at')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$provisioningToken) {
+            Log::warning("Token de aprovisionamiento inválido, expirado o ya usado: {$tempToken}");
+            return;
+        }
+
+        // 3. Crear el nuevo dispositivo usando el ChipID como serial_number permanente
+        $device = Device::create([
+            'team_id' => $provisioningToken->team_id,
+            'name' => 'Device ' . $chipId,
+            'serial_number' => $chipId, // El ChipID es el nuevo ID permanente
+            'status' => 'active',
+        ]);
+
+        // 4. Invalidar el token temporal
+        $provisioningToken->update(['used_at' => now()]);
+
+        Log::info("Aprovisionamiento exitoso para ChipID [{$chipId}]. Nuevo Device ID: {$device->id}");
+
+        // 5. Publicar el ID permanente de vuelta al dispositivo
+        $this->publishProvisioningResponse($tempToken, $chipId);
+    }
+
+    /**
+     * Registra una nueva medición para un dispositivo existente.
+     */
+    protected function recordMeasurement(Device $device, array $data): void
+    {
         try {
             Measurement::create([
                 'device_id' => $device->id,
@@ -88,6 +104,27 @@ class ProcessMeasurementJob implements ShouldQueue
         } catch (\Exception $e) {
             Log::error("Error al guardar medición para dispositivo {$device->id}: " . $e->getMessage());
             $this->fail($e);
+        }
+    }
+
+    /**
+     * Publica el ID permanente de vuelta al dispositivo a través de MQTT.
+     */
+    protected function publishProvisioningResponse(string $tempToken, string $permanentId): void
+    {
+        try {
+            $mqtt = new MqttClient(config('mqtt.connections.default.host'), config('mqtt.connections.default.port'));
+            $mqtt->connect();
+            
+            $responseTopic = "devices/provision/{$tempToken}/response";
+            $payload = json_encode(['permanent_id' => $permanentId]);
+            
+            $mqtt->publish($responseTopic, $payload, 0);
+            $mqtt->disconnect();
+            
+            Log::info("Respuesta de aprovisionamiento enviada a [{$responseTopic}]");
+        } catch (\Exception $e) {
+            Log::error("Fallo al publicar respuesta de aprovisionamiento: " . $e->getMessage());
         }
     }
 }
