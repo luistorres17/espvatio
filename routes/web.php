@@ -1,10 +1,9 @@
 <?php
 
+use App\Livewire\DeviceManager; // <--- Añadir esta línea
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// ...
 
 Route::middleware([
     'auth:sanctum',
@@ -14,4 +13,7 @@ Route::middleware([
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
+    
+    // --- AÑADIR ESTA LÍNEA ---
+    Route::get('/devices', DeviceManager::class)->name('devices.index');
 });

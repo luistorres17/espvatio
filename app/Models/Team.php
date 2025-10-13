@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+// --- PASO 1: ASEGÚRATE DE IMPORTAR LA CLASE CORRECTA ---
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Laravel\Jetstream\Events\TeamCreated;
 use Laravel\Jetstream\Events\TeamDeleted;
 use Laravel\Jetstream\Events\TeamUpdated;
@@ -10,7 +12,6 @@ use Laravel\Jetstream\Team as JetstreamTeam;
 
 class Team extends JetstreamTeam
 {
-    /** @use HasFactory<\Database\Factories\TeamFactory> */
     use HasFactory;
 
     /**
@@ -44,5 +45,23 @@ class Team extends JetstreamTeam
         return [
             'personal_team' => 'boolean',
         ];
+    }
+
+    /**
+     * Get all of the devices for the team.
+     */
+    // --- PASO 2: CORRIGE EL TIPO DE RETORNO AQUÍ ---
+    public function devices(): HasMany
+    {
+        return $this->hasMany(Device::class);
+    }
+
+    /**
+     * Get all of the provisioning tokens for the team.
+     */
+    // --- PASO 3: Y TAMBIÉN AQUÍ ---
+    public function provisioningTokens(): HasMany
+    {
+        return $this->hasMany(ProvisioningToken::class);
     }
 }
