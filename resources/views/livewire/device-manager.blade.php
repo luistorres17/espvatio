@@ -35,7 +35,7 @@
                         <tbody>
                             @forelse ($devices as $device)
                                 <tr class="bg-white border-b hover:bg-gray-50">
-                                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{{ $device->name }}</td>
+                                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{{-- Convertir el nombre en un enlace --}}<a href="{{ route('devices.show', $device) }}" class="text-blue-600 hover:underline" wire:navigate>{{ $device->name }}</a></td>
                                     <td class="px-6 py-4">{{ $device->serial_number }}</td>
                                     <td class="px-6 py-4">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $device->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
