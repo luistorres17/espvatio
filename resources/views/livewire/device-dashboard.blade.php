@@ -19,54 +19,43 @@
     </div>
 
 @push('scripts')
-{{-- Incluimos la librería desde node_modules --}}
-@vite('resources/js/app.js')
+
+
 <script>
-    // Usamos el evento 'livewire:navigated' que se dispara después de la navegación SPA
+    // 2. Usamos el evento 'livewire:navigated' para asegurarnos de que el script se ejecuta en cada carga de página
     document.addEventListener('livewire:navigated', () => {
-        // Obtenemos los datos desde el componente Livewire y los convertimos a JSON
+        // Obtenemos los datos desde el componente Livewire
         const measurementData = @json($this->measurements);
 
         var options = {
             chart: {
                 type: 'area',
                 height: 350,
-                zoom: {
-                    enabled: false
-                }
+                zoom: { enabled: false }
             },
             series: [{
                 name: 'Consumo (W)',
                 data: measurementData
             }],
-            dataLabels: {
-                enabled: false
-            },
-            stroke: {
-                curve: 'smooth'
-            },
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth' },
             title: {
                 text: 'Consumo de Energía (Últimas 24 horas)',
                 align: 'left'
             },
             xaxis: {
                 type: 'datetime',
-                labels: {
-                    datetimeUTC: false // Mostrar en hora local
-                }
+                labels: { datetimeUTC: false }
             },
             yaxis: {
-                title: {
-                    text: 'Watts'
-                }
+                title: { text: 'Watts' }
             },
             tooltip: {
-                x: {
-                    format: 'dd MMM yyyy - HH:mm'
-                }
+                x: { format: 'dd MMM yyyy - HH:mm' }
             }
         };
 
+        // 3. Renderizamos el gráfico
         var chart = new ApexCharts(document.querySelector("#chart"), options);
         chart.render();
     });
