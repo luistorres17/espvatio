@@ -11,27 +11,43 @@ use Livewire\Attributes\Layout; // <-- 1. Importar el atributo
 class DeviceDashboard extends Component
 {
     public Device $device;
-    public $measurements;
+    public $measurements = [];
+    public string $timeframe = '24h';
 
-    public function mount(Device $device, FetchDeviceMeasurementsAction $fetcher)
+    // Propiedades añadidas para la Tarea 3.9
+    public $dailyConsumptionKwh = 0;
+    public $monthlyConsumptionKwh = 0;
+    public $monthlyCostEstimate = 0;
+
+    public function mount(Device $device)
     {
         $this->device = $device;
-        
-        try {
-            $this->measurements = $fetcher->execute($device);
-        } catch (\Exception $e) {
-            // Si la consulta a TimescaleDB falla, mostramos un error amigable
-            // y evitamos que la página se rompa.
-            $this->measurements = collect();
-            Log::error('Error al obtener mediciones: ' . $e->getMessage());
-            // Opcional: puedes añadir un mensaje de sesión para el usuario.
-            // session()->flash('error', 'No se pudieron cargar los datos del gráfico.');
-        }
+        $this->fetchData(app(FetchDeviceMeasurementsAction::class));
+    }
+
+    /**
+     * Obtiene los datos de mediciones y cálculos.
+     * Modificado para Tarea 3.9 para desestructurar los resultados.
+     */
+    public function fetchData(FetchDeviceMeasurementsAction $fetchMeasurements)
+    {
+        // La acción ahora devuelve un array asociativo (definido en Tarea 3.8)
+        $data = $fetchMeasurements->execute($this->device, $this->timeframe);
+
+        // Asignar datos del gráfico
+        $this->measurements = $data['measurements'];
+
+        // Asignar nuevas estadísticas (Tarea 3.9)
+        $this->dailyConsumptionKwh = $data['daily_consumption_kwh'];
+        $this->monthlyConsumptionKwh = $data['monthly_consumption_kwh'];
+        $this->monthlyCostEstimate = $data['monthly_cost_estimate'];
+
+        // Enviar solo los datos del gráfico al evento del frontend
+        $this->dispatch('data-updated', data: $this->measurements);
     }
 
     public function render()
     {
-        // 3. Ya no se necesita el método ->layout() aquí
         return view('livewire.device-dashboard');
     }
 }

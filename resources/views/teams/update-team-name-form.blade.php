@@ -8,12 +8,11 @@
     </x-slot>
 
     <x-slot name="form">
-        <!-- Team Owner Information -->
         <div class="col-span-6">
             <x-label value="{{ __('Team Owner') }}" />
 
             <div class="flex items-center mt-2">
-                <img class="size-12 rounded-full object-cover" src="{{ $team->owner->profile_photo_url }}" alt="{{ $team->owner->name }}">
+                <img class="w-12 h-12 rounded-full object-cover" src="{{ $team->owner->profile_photo_url }}" alt="{{ $team->owner->name }}">
 
                 <div class="ms-4 leading-tight">
                     <div class="text-gray-900">{{ $team->owner->name }}</div>
@@ -22,7 +21,6 @@
             </div>
         </div>
 
-        <!-- Team Name -->
         <div class="col-span-6 sm:col-span-4">
             <x-label for="name" value="{{ __('Team Name') }}" />
 
@@ -34,7 +32,20 @@
 
             <x-input-error for="name" class="mt-2" />
         </div>
-    </x-slot>
+        
+        <div class="col-span-6 sm:col-span-4">
+            <x-label for="cost_per_kwh" value="{{ __('Costo por kWh (Ej: 1.75)') }}" />
+
+            <x-input id="cost_per_kwh"
+                        type="number"
+                        step="0.0001"
+                        class="mt-1 block w-full"
+                        wire:model="state.cost_per_kwh"
+                        :disabled="! Gate::check('update', $team)" />
+
+            <x-input-error for="cost_per_kwh" class="mt-2" />
+        </div>
+        </x-slot>
 
     @if (Gate::check('update', $team))
         <x-slot name="actions">
